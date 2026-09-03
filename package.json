@@ -1,6 +1,6 @@
 {
   "name": "@coll2112/decision-engine",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "A TypeScript decision engine for branching story data, runtime state, and section-aware presentation.",
   "private": false,
   "type": "module",
