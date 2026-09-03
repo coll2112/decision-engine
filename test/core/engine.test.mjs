@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   DecisionEngine,
+  EffectHandlers,
   choice,
   defineStory,
   scene,
@@ -99,4 +100,82 @@ test("goToSceneView records history and returns a scene view", () => {
 
   assert.equal(view.scene.id, "thread");
   assert.deepEqual(engine.getState().history, ["desktop"]);
+});
+
+test("getCurrentScene preserves custom scene content", () => {
+  const engine = new DecisionEngine(
+    defineStory({
+      id: "content-test",
+      title: "Content Test",
+      startSceneId: "room",
+      scenes: [
+        scene("room", "Room fallback text", [], {
+          content: {
+            kind: "room",
+            exits: ["north"],
+          },
+        }),
+      ],
+    }),
+  );
+
+  assert.deepEqual(engine.getCurrentScene().content, {
+    kind: "room",
+    exits: ["north"],
+  });
+});
+
+test("choose dispatches registered custom effects", () => {
+  const dispatched = [];
+  const effectHandlers = new EffectHandlers().register("trackEvent", (effect) => {
+    dispatched.push(effect.data);
+  });
+  const engine = new DecisionEngine(
+    defineStory({
+      id: "custom-effects",
+      title: "Custom Effects",
+      startSceneId: "start",
+      scenes: [
+        scene("start", "Start", [
+          choice("Continue", "end", {
+            effects: [
+              {
+                type: "trackEvent",
+                data: { name: "continued" },
+              },
+            ],
+          }),
+        ]),
+        scene("end", "End"),
+      ],
+    }),
+    { effectHandlers },
+  );
+
+  engine.choose("continue");
+
+  assert.deepEqual(dispatched, [{ name: "continued" }]);
+});
+
+test("choose rejects unhandled custom effects by default", () => {
+  const engine = new DecisionEngine(
+    defineStory({
+      id: "custom-effects",
+      title: "Custom Effects",
+      startSceneId: "start",
+      scenes: [
+        scene("start", "Start", [
+          choice("Continue", "end", {
+            effects: [{ type: "missingHandler" }],
+          }),
+        ]),
+        scene("end", "End"),
+      ],
+    }),
+  );
+
+  assert.throws(
+    () => engine.choose("continue"),
+    /Unhandled custom effect: missingHandler/,
+  );
 });

@@ -101,6 +101,106 @@ view.presentation; // merged section + scene presentation
 view.assets; // merged section assets
 ```
 
+## Custom Scene Content
+
+Scenes can carry game-specific JSON content. The engine preserves that content and returns it from scene APIs, but does not interpret it.
+
+```ts
+import { DecisionEngine, defineStory, scene } from "@coll2112/decision-engine";
+
+type AdventureContent =
+  | { kind: "room"; exits: string[] }
+  | { kind: "inspect"; itemId: string };
+
+const story = defineStory<AdventureContent>({
+  id: "adventure",
+  title: "Adventure",
+  startSceneId: "room",
+  scenes: [
+    scene<AdventureContent>("room", "A quiet room.", [], {
+      content: {
+        kind: "room",
+        exits: ["hallway"],
+      },
+    }),
+  ],
+});
+
+const engine = new DecisionEngine<AdventureContent>(story);
+const sceneWithContent = engine.getCurrentScene();
+
+sceneWithContent.content; // AdventureContent | undefined
+```
+
+Existing `speaker`, `text`, `choices`, `conditions`, `effects`, and `presentation` fields remain supported, so older stories do not need to be rewritten.
+
+## Extensible Presentation
+
+Presentation hints can also carry generic data. Built-in presentation fields such as `background`, `elements`, and `audio` still work, while `type` and `data` let a renderer opt into richer layout information.
+
+```ts
+type PresentationData = { layout: "dialogue" | "map" };
+
+const story = defineStory<unknown, PresentationData>({
+  id: "presentation",
+  title: "Presentation",
+  startSceneId: "start",
+  scenes: [
+    scene<unknown, PresentationData>("start", "Start", [], {
+      presentation: {
+        type: "scene-layout",
+        data: { layout: "dialogue" },
+      },
+    }),
+  ],
+});
+```
+
+## Custom Effects
+
+The engine continues to execute built-in variable effects:
+
+```ts
+{
+  variable: "trust",
+  operation: "increment",
+  value: 1,
+}
+```
+
+Games can register handlers for custom effects. The engine dispatches these effects by `type` and leaves their meaning to the consuming application.
+
+```ts
+import { DecisionEngine, EffectHandlers } from "@coll2112/decision-engine";
+
+type AppEffectData = { id: string };
+
+const effectHandlers = new EffectHandlers<AppEffectData>().register(
+  "showOverlay",
+  (effect) => {
+    showOverlay(effect.data?.id);
+  },
+);
+
+const engine = new DecisionEngine(story, { effectHandlers });
+```
+
+Unhandled custom effects throw by default. Pass `{ unhandledCustomEffect: "ignore" }` if the host application wants to tolerate missing handlers.
+
+## Custom Validation
+
+`parseStory` and `assertStory` validate the story structure owned by the engine. If a game wants to validate custom scene content or presentation data, it can provide narrow hooks:
+
+```ts
+const story = parseStory<AdventureContent>(storyJson, {
+  validateSceneContent(content, sceneId) {
+    if (content.kind !== "room" && content.kind !== "inspect") {
+      throw new Error(`Scene ${sceneId} has unsupported content`);
+    }
+  },
+});
+```
+
 ## Runtime API
 
 ```ts

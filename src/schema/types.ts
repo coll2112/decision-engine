@@ -1,29 +1,40 @@
-export type Story = {
+export type Story<
+  TContent = unknown,
+  TPresentationData = unknown,
+  TCustomEffectData = unknown,
+> = {
   id: string;
   title: string;
   startSceneId: string;
-  sections?: Section[];
-  scenes: Scene[];
+  sections?: Section<TPresentationData>[];
+  scenes: Scene<TContent, TPresentationData, TCustomEffectData>[];
 };
 
-export type Section = {
+export type Section<TPresentationData = unknown> = {
   id: string;
   title?: string;
   parentSectionId?: string;
-  presentation?: ScenePresentation;
+  presentation?: ScenePresentation<TPresentationData>;
   assets?: Record<string, Asset>;
   sceneIds?: string[];
 };
 
-export type Scene = {
+export type Scene<
+  TContent = unknown,
+  TPresentationData = unknown,
+  TCustomEffectData = unknown,
+> = {
   id: string;
-  presentation?: ScenePresentation;
+  content?: TContent;
+  presentation?: ScenePresentation<TPresentationData>;
   speaker?: string;
   text: string;
-  choices: Choice[];
+  choices: Choice<TCustomEffectData>[];
 };
 
-export type ScenePresentation = {
+export type ScenePresentation<TData = unknown> = {
+  type?: string;
+  data?: TData;
   background?: Asset;
   elements?: SceneElement[];
   audio?: SceneAudio[];
@@ -76,12 +87,12 @@ export type AudioCue = {
   delayMs?: number;
 };
 
-export type Choice = {
+export type Choice<TCustomEffectData = unknown> = {
   id: string;
   text: string;
   nextSceneId: string;
   conditions?: Condition[];
-  effects?: Effect[];
+  effects?: Effect<TCustomEffectData>[];
 };
 
 export type Condition = {
@@ -90,11 +101,20 @@ export type Condition = {
   value: VariableValue;
 };
 
-export type Effect = {
+export type VariableEffect = {
   variable: string;
   operation: "set" | "increment" | "decrement";
   value: VariableValue;
 };
+
+export type CustomEffect<TData = unknown> = {
+  type: string;
+  data?: TData;
+};
+
+export type Effect<TCustomData = unknown> =
+  | VariableEffect
+  | CustomEffect<TCustomData>;
 
 export type VariableValue = string | number | boolean;
 export type Asset = { src: string };

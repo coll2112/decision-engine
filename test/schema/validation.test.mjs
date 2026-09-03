@@ -73,3 +73,75 @@ test("validateStory rejects duplicate scene membership", () => {
     /Scene next is assigned to more than one section/,
   );
 });
+
+test("parseStory passes custom content to an optional validator", () => {
+  const seen = [];
+  const story = parseStory(
+    {
+      id: "custom-content",
+      title: "Custom Content",
+      startSceneId: "start",
+      scenes: [
+        {
+          id: "start",
+          text: "Start",
+          choices: [],
+          content: {
+            kind: "room",
+          },
+        },
+      ],
+    },
+    {
+      validateSceneContent(content, sceneId) {
+        seen.push([sceneId, content.kind]);
+      },
+    },
+  );
+
+  assert.equal(story.scenes[0].content.kind, "room");
+  assert.deepEqual(seen, [["start", "room"]]);
+});
+
+test("parseStory passes presentation data to an optional validator", () => {
+  const seen = [];
+
+  parseStory(
+    {
+      id: "presentation-data",
+      title: "Presentation Data",
+      startSceneId: "start",
+      sections: [
+        {
+          id: "root",
+          sceneIds: ["start"],
+          presentation: {
+            type: "chapter",
+            data: { layout: "wide" },
+          },
+        },
+      ],
+      scenes: [
+        {
+          id: "start",
+          text: "Start",
+          choices: [],
+          presentation: {
+            type: "dialogue",
+            data: { mood: "tense" },
+          },
+        },
+      ],
+    },
+    {
+      validatePresentationData(data, owner) {
+        seen.push([owner.kind, owner.id, Object.keys(data)[0]]);
+      },
+    },
+  );
+
+  assert.deepEqual(seen, [
+    ["scene", "start", "mood"],
+    ["section", "root", "layout"],
+  ]);
+});

@@ -1,9 +1,30 @@
 import type { Story } from "./types.js";
 
-export function validateStory(story: Story): void {
+export type StoryValidationOptions<
+  TContent = unknown,
+  TPresentationData = unknown,
+> = {
+  validateSceneContent?: (content: TContent, sceneId: string) => void;
+  validatePresentationData?: (
+    data: TPresentationData,
+    owner: { kind: "scene" | "section"; id: string },
+  ) => void;
+};
+
+export function validateStory<
+  TContent = unknown,
+  TPresentationData = unknown,
+  TCustomEffectData = unknown,
+>(
+  story: Story<TContent, TPresentationData, TCustomEffectData>,
+  options: StoryValidationOptions<TContent, TPresentationData> = {},
+): void {
   const sceneIds = new Set<string>();
   const sectionIds = new Set<string>();
-  const sectionsById = new Map<string, NonNullable<Story["sections"]>[number]>();
+  const sectionsById = new Map<
+    string,
+    NonNullable<Story<TContent, TPresentationData>["sections"]>[number]
+  >();
   const assignedSceneIds = new Set<string>();
 
   for (const scene of story.scenes) {
@@ -12,6 +33,17 @@ export function validateStory(story: Story): void {
     }
 
     sceneIds.add(scene.id);
+
+    if ("content" in scene && options.validateSceneContent) {
+      options.validateSceneContent(scene.content as TContent, scene.id);
+    }
+
+    if (scene.presentation && "data" in scene.presentation) {
+      options.validatePresentationData?.(scene.presentation.data as TPresentationData, {
+        kind: "scene",
+        id: scene.id,
+      });
+    }
   }
 
   if (!sceneIds.has(story.startSceneId)) {
@@ -25,6 +57,16 @@ export function validateStory(story: Story): void {
 
     sectionIds.add(section.id);
     sectionsById.set(section.id, section);
+
+    if (section.presentation && "data" in section.presentation) {
+      options.validatePresentationData?.(
+        section.presentation.data as TPresentationData,
+        {
+          kind: "section",
+          id: section.id,
+        },
+      );
+    }
 
     const sectionSceneIds = new Set<string>();
 

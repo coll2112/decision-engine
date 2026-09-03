@@ -1,21 +1,30 @@
 import {
   type Story,
-  type Scene,
   type Choice,
+  type CustomEffect,
   type Effect,
+  type Scene,
   type ScenePresentation,
   type Section,
   type Asset,
   validateStory,
 } from "../schema/index.js";
-import type { GameState, SceneView } from "./types.js";
+import {
+  type CustomEffectHandler,
+  type DecisionEngineOptions,
+  type EffectHandlerMap,
+  EffectHandlers,
+  type GameState,
+  type SceneView,
+} from "./types.js";
 
-function mergePresentation(
-  sectionPresentations: ScenePresentation[],
-  scenePresentation?: ScenePresentation,
-): ScenePresentation | undefined {
+function mergePresentation<TPresentationData>(
+  sectionPresentations: ScenePresentation<TPresentationData>[],
+  scenePresentation?: ScenePresentation<TPresentationData>,
+): ScenePresentation<TPresentationData> | undefined {
   const presentations = [...sectionPresentations, scenePresentation].filter(
-    (presentation): presentation is ScenePresentation => Boolean(presentation),
+    (presentation): presentation is ScenePresentation<TPresentationData> =>
+      Boolean(presentation),
   );
 
   if (presentations.length === 0) return undefined;
@@ -28,14 +37,29 @@ function mergePresentation(
     .reverse()
     .find((presentation) => presentation.background)?.background;
 
+  const lastTypedPresentation = [...presentations]
+    .reverse()
+    .find(
+      (presentation) =>
+        presentation.type !== undefined || presentation.data !== undefined,
+    );
+
   return {
+    ...(lastTypedPresentation?.type !== undefined
+      ? { type: lastTypedPresentation.type }
+      : {}),
+    ...(lastTypedPresentation?.data !== undefined
+      ? { data: lastTypedPresentation.data }
+      : {}),
     ...(background ? { background } : {}),
     ...(elements.length > 0 ? { elements } : {}),
     ...(audio.length > 0 ? { audio } : {}),
   };
 }
 
-function mergeAssets(sections: Section[]): Record<string, Asset> {
+function mergeAssets<TPresentationData>(
+  sections: Section<TPresentationData>[],
+): Record<string, Asset> {
   return sections.reduce<Record<string, Asset>>(
     (assets, section) => ({
       ...assets,
@@ -53,18 +77,58 @@ function cloneState(state: GameState): GameState {
   };
 }
 
-export class DecisionEngine {
-  private readonly sceneMap: Map<string, Scene>;
-  private readonly sectionMap: Map<string, Section>;
-  private readonly sceneSectionMap: Map<string, Section>;
+function createEffectHandlers<TCustomEffectData>(
+  handlers:
+    | EffectHandlers<TCustomEffectData>
+    | EffectHandlerMap<TCustomEffectData>
+    | undefined,
+): EffectHandlers<TCustomEffectData> {
+  if (handlers instanceof EffectHandlers) return handlers;
 
-  private story: Story;
+  const registry = new EffectHandlers<TCustomEffectData>();
+
+  for (const [type, handler] of Object.entries(handlers ?? {}) as [
+    string,
+    CustomEffectHandler<TCustomEffectData>,
+  ][]) {
+    registry.register(type, handler);
+  }
+
+  return registry;
+}
+
+function isCustomEffect<TCustomEffectData>(
+  effect: Effect<TCustomEffectData>,
+): effect is CustomEffect<TCustomEffectData> {
+  return "type" in effect;
+}
+
+export class DecisionEngine<
+  TContent = unknown,
+  TPresentationData = unknown,
+  TCustomEffectData = unknown,
+> {
+  private readonly effectHandlers: EffectHandlers<TCustomEffectData>;
+  private readonly sceneMap: Map<
+    string,
+    Scene<TContent, TPresentationData, TCustomEffectData>
+  >;
+  private readonly sectionMap: Map<string, Section<TPresentationData>>;
+  private readonly sceneSectionMap: Map<string, Section<TPresentationData>>;
+
+  private story: Story<TContent, TPresentationData, TCustomEffectData>;
   private state: GameState;
+  private unhandledCustomEffect: "throw" | "ignore";
 
-  constructor(story: Story) {
+  constructor(
+    story: Story<TContent, TPresentationData, TCustomEffectData>,
+    options: DecisionEngineOptions<TCustomEffectData> = {},
+  ) {
     validateStory(story);
 
     this.story = story;
+    this.effectHandlers = createEffectHandlers(options.effectHandlers);
+    this.unhandledCustomEffect = options.unhandledCustomEffect ?? "throw";
 
     this.sceneMap = new Map(story.scenes.map((scene) => [scene.id, scene]));
     this.sectionMap = new Map(
@@ -83,7 +147,11 @@ export class DecisionEngine {
     };
   }
 
-  public getCurrentScene(): Scene {
+  public getCurrentScene(): Scene<
+    TContent,
+    TPresentationData,
+    TCustomEffectData
+  > {
     const scene = this.getScene(this.state.currentSceneId);
 
     return {
@@ -92,7 +160,11 @@ export class DecisionEngine {
     };
   }
 
-  public getCurrentSceneView(): SceneView {
+  public getCurrentSceneView(): SceneView<
+    TContent,
+    TPresentationData,
+    TCustomEffectData
+  > {
     const scene = this.getCurrentScene();
     const section = this.sceneSectionMap.get(scene.id);
     const sections = section ? this.getSectionChain(section) : [];
@@ -111,7 +183,7 @@ export class DecisionEngine {
     };
   }
 
-  public getSection(id: string): Section {
+  public getSection(id: string): Section<TPresentationData> {
     const section = this.sectionMap.get(id);
 
     if (!section) {
@@ -121,7 +193,9 @@ export class DecisionEngine {
     return section;
   }
 
-  public choose(choiceId: string): Scene {
+  public choose(
+    choiceId: string,
+  ): Scene<TContent, TPresentationData, TCustomEffectData> {
     const currentScene = this.getCurrentScene();
 
     const choice = currentScene.choices.find((choice) => choice.id === choiceId);
@@ -138,7 +212,9 @@ export class DecisionEngine {
     return this.getCurrentScene();
   }
 
-  public chooseView(choiceId: string): SceneView {
+  public chooseView(
+    choiceId: string,
+  ): SceneView<TContent, TPresentationData, TCustomEffectData> {
     this.choose(choiceId);
 
     return this.getCurrentSceneView();
@@ -154,13 +230,15 @@ export class DecisionEngine {
     this.state = cloneState(state);
   }
 
-  public loadStateView(state: GameState): SceneView {
+  public loadStateView(
+    state: GameState,
+  ): SceneView<TContent, TPresentationData, TCustomEffectData> {
     this.loadState(state);
 
     return this.getCurrentSceneView();
   }
 
-  public restart(): Scene {
+  public restart(): Scene<TContent, TPresentationData, TCustomEffectData> {
     this.state = {
       currentSceneId: this.story.startSceneId,
       history: [],
@@ -170,13 +248,19 @@ export class DecisionEngine {
     return this.getCurrentScene();
   }
 
-  public restartView(): SceneView {
+  public restartView(): SceneView<
+    TContent,
+    TPresentationData,
+    TCustomEffectData
+  > {
     this.restart();
 
     return this.getCurrentSceneView();
   }
 
-  public goToScene(sceneId: string): Scene {
+  public goToScene(
+    sceneId: string,
+  ): Scene<TContent, TPresentationData, TCustomEffectData> {
     this.getScene(sceneId);
     this.state.history.push(this.state.currentSceneId);
     this.state.currentSceneId = sceneId;
@@ -184,13 +268,17 @@ export class DecisionEngine {
     return this.getCurrentScene();
   }
 
-  public goToSceneView(sceneId: string): SceneView {
+  public goToSceneView(
+    sceneId: string,
+  ): SceneView<TContent, TPresentationData, TCustomEffectData> {
     this.goToScene(sceneId);
 
     return this.getCurrentSceneView();
   }
 
-  private getAvailableChoices(choices: Choice[]): Choice[] {
+  private getAvailableChoices(
+    choices: Choice<TCustomEffectData>[],
+  ): Choice<TCustomEffectData>[] {
     return choices.filter((choice) => {
       if (!choice.conditions?.length) return true;
 
@@ -217,8 +305,21 @@ export class DecisionEngine {
     });
   }
 
-  private applyEffects(effects: Effect[]): void {
+  private applyEffects(effects: Effect<TCustomEffectData>[]): void {
     effects.forEach((effect) => {
+      if (isCustomEffect(effect)) {
+        const handler = this.effectHandlers.get(effect.type);
+
+        if (!handler) {
+          if (this.unhandledCustomEffect === "ignore") return;
+
+          throw new Error(`Unhandled custom effect: ${effect.type}`);
+        }
+
+        handler(effect, { state: cloneState(this.state) });
+        return;
+      }
+
       const currentValue = this.state.variables[effect.variable];
 
       switch (effect.operation) {
@@ -237,7 +338,9 @@ export class DecisionEngine {
     });
   }
 
-  private getScene(id: string): Scene {
+  private getScene(
+    id: string,
+  ): Scene<TContent, TPresentationData, TCustomEffectData> {
     const scene = this.sceneMap.get(id);
 
     if (!scene) {
@@ -247,9 +350,11 @@ export class DecisionEngine {
     return scene;
   }
 
-  private getSectionChain(section: Section): Section[] {
-    const sections: Section[] = [];
-    let current: Section | undefined = section;
+  private getSectionChain(
+    section: Section<TPresentationData>,
+  ): Section<TPresentationData>[] {
+    const sections: Section<TPresentationData>[] = [];
+    let current: Section<TPresentationData> | undefined = section;
 
     while (current) {
       sections.unshift(current);

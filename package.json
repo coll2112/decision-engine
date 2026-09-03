@@ -25,7 +25,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "npm run build && node --test test/**/*.test.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2020 --strict --skipLibCheck test/types/generic-api.ts",
     "verify": "npm run typecheck && npm test",
     "prepublishOnly": "npm run verify"
   },
