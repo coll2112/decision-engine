@@ -23,16 +23,13 @@ jobs:
           registry-url: https://npm.pkg.github.com
           scope: '@coll2112'
 
-      - name: Enable Corepack
-        run: corepack enable
-
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Build
-        run: pnpm build
+        run: npm run build
 
       - name: Publish
-        run: pnpm publish --no-git-checks
+        run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
