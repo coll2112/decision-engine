@@ -1,4 +1,5 @@
 import type { Story } from "./types.js";
+import { object, string, validateConditions, validateEffects } from "./shape-validation.js";
 
 export type StoryValidationOptions<
   TContent = unknown,
@@ -19,6 +20,12 @@ export function validateStory<
   story: Story<TContent, TPresentationData, TCustomEffectData>,
   options: StoryValidationOptions<TContent, TPresentationData> = {},
 ): void {
+  object(story, "Story");
+  string(story.id, "Story.id");
+  if (typeof story.title !== "string") throw new Error("Story.title must be a string");
+  string(story.startSceneId, "Story.startSceneId");
+  if (!Array.isArray(story.scenes)) throw new Error("Story.scenes must be an array");
+  if (story.sections !== undefined && !Array.isArray(story.sections)) throw new Error("Story.sections must be an array");
   const sceneIds = new Set<string>();
   const sectionIds = new Set<string>();
   const sectionsById = new Map<
@@ -28,6 +35,22 @@ export function validateStory<
   const assignedSceneIds = new Set<string>();
 
   for (const scene of story.scenes) {
+    object(scene, "Scene");
+    string(scene.id, "Scene.id");
+    if (typeof scene.text !== "string") throw new Error(`Scene ${scene.id}.text must be a string`);
+    if (!Array.isArray(scene.choices)) throw new Error(`Scene ${scene.id}.choices must be an array`);
+    const choiceIds = new Set<string>();
+    for (const choice of scene.choices) {
+      object(choice, `Scene ${scene.id} choice`);
+      const context = `Scene ${scene.id} choice ${choice.id}`;
+      string(choice.id, `${context}.id`);
+      if (choiceIds.has(choice.id)) throw new Error(`${context}.id is duplicate`);
+      choiceIds.add(choice.id);
+      if (typeof choice.text !== "string") throw new Error(`${context}.text must be a string`);
+      string(choice.nextSceneId, `${context}.nextSceneId`);
+      validateConditions(choice.conditions, `${context}.conditions`);
+      validateEffects(choice.effects, `${context}.effects`);
+    }
     if (sceneIds.has(scene.id)) {
       throw new Error(`Duplicate scene id found: ${scene.id}`);
     }
@@ -51,6 +74,10 @@ export function validateStory<
   }
 
   for (const section of story.sections ?? []) {
+    object(section, "Section");
+    string(section.id, "Section.id");
+    if (section.parentSectionId !== undefined) string(section.parentSectionId, `Section ${section.id}.parentSectionId`);
+    if (section.sceneIds !== undefined && !Array.isArray(section.sceneIds)) throw new Error(`Section ${section.id}.sceneIds must be an array`);
     if (sectionIds.has(section.id)) {
       throw new Error(`Duplicate section id found: ${section.id}`);
     }
@@ -131,7 +158,7 @@ export function validateStory<
     for (const choice of scene.choices) {
       if (!sceneIds.has(choice.nextSceneId)) {
         throw new Error(
-          `Scene ${scene.id} has choice ${choice.id} pointing to missing scene ${choice.nextSceneId}`,
+          `Scene ${scene.id} has choice ${choice.id} pointing to missing scene ${choice.nextSceneId} (nextSceneId)`,
         );
       }
     }

@@ -145,3 +145,57 @@ test("parseStory passes presentation data to an optional validator", () => {
     ["section", "root", "layout"],
   ]);
 });
+
+for (const [field, value, expected] of [
+  ["conditions", {}, "conditions"],
+  ["conditions", [null], "conditions\\[0\\]"],
+  ["conditions", [{ variable: "", operator: "===", value: true }], "variable"],
+  ["conditions", [{ variable: "x", operator: "==", value: true }], "operator"],
+  ["conditions", [{ variable: "x", operator: "===", value: {} }], "value"],
+  ["conditions", [{ variable: "x", operator: "===", value: NaN }], "value"],
+  ["conditions", [{ variable: "x", operator: "===", value: true, op: "eq" }], "op"],
+  ["effects", {}, "effects"],
+  ["effects", [null], "effects\\[0\\]"],
+  ["effects", [{ variable: "x", operation: "add", value: 1 }], "operation"],
+  ["effects", [{ variable: "", operation: "set", value: 1 }], "variable"],
+  ["effects", [{ variable: "x", operation: "set" }], "value"],
+  ["effects", [{ variable: "x", operation: "set", value: Infinity }], "value"],
+  ["effects", [{ type: "" }], "type"],
+  ["effects", [{ type: "custom", variable: "x", operation: "set", value: 1 }], "variable"],
+]) {
+  test(`reject malformed ${field}: ${JSON.stringify(value)}`, () => {
+    const story = baseStory();
+    story.scenes[0].choices[0][field] = value;
+    assert.throws(() => parseStory(story), new RegExp(`Scene start choice continue.*${expected}`));
+  });
+}
+
+test("choice identities must be unique within each scene only", () => {
+  const story = baseStory();
+  story.scenes[1].choices.push({ ...story.scenes[0].choices[0] });
+  assert.doesNotThrow(() => parseStory(story));
+  story.scenes[0].choices.push({ ...story.scenes[0].choices[0] });
+  assert.throws(() => parseStory(story), /Scene start choice continue.id is duplicate/);
+});
+
+test("valid canonical effects and conditions retain custom data hooks", () => {
+  const story = baseStory();
+  story.scenes[0].content = { kind: "custom" };
+  story.scenes[0].choices[0].conditions = [{ variable: "x", operator: ">=", value: "2" }];
+  story.scenes[0].choices[0].effects = [
+    { variable: "x", operation: "increment", value: "1" },
+    { variable: "x", operation: "decrement", value: true },
+    { type: "custom", data: { any: ["payload"] } },
+  ];
+  let calls = 0;
+  parseStory(story, { validateSceneContent: () => { calls++; } });
+  assert.equal(calls, 1);
+});
+
+test("sparse condition and effect arrays are malformed", () => {
+  for (const field of ["conditions", "effects"]) {
+    const story = baseStory();
+    story.scenes[0].choices[0][field] = new Array(1);
+    assert.throws(() => parseStory(story), new RegExp(`Scene start choice continue.${field}\\[0\\]`));
+  }
+});

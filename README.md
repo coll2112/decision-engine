@@ -221,7 +221,77 @@ engine.loadState(save);
 engine.loadStateView(save);
 ```
 
-`getState()` returns a defensive copy. `loadState()` validates that the saved `currentSceneId` exists before loading it.
+`getState()` returns a defensive copy, including scheduling records. `loadState()` validates the current scene, history/variables shape, and every scheduling record before replacing state. Saves without `scheduledContent` remain supported.
+
+### Read-only scene queries
+
+`getScene(sceneId)` returns a scene with all its authored choices. `getAvailableChoices(sceneId)` filters that scene's choices against the current variables. Neither navigates, changes history, or schedules content. `getCurrentScene()` continues to return the current scene with available choices. Scene/choice shells, conditions, and effects are copied; opaque content, presentation, and custom effect payloads remain application-owned and should be treated as immutable.
+
+### Shared conditions and validation
+
+`evaluateConditions(conditions, variables)` is the evaluator used by choices and scheduled content. Missing or empty conditions match; otherwise all conditions must match. Equality (`===`, `!==`) is strict, and ordering (`>`, `>=`, `<`, `<=`) uses `Number` coercion, including the existing behavior for missing variables.
+
+The canonical condition shape is `{ variable, operator, value }`. Built-in effects use `{ variable, operation: "set" | "increment" | "decrement", value }`; custom effects use `{ type, data? }`. Validation rejects unsupported fields in these shapes, invalid operators/operations or values, and duplicate choice IDs within a scene. Errors include the scene, choice/content identity, and field. Custom content and presentation validation hooks remain available.
+
+## Scheduled content
+
+Pass renderer-independent definitions in `DecisionEngineOptions.scheduledContent`. The engine tracks `(sourceId, id)` pairs; `sourceId` is an opaque namespace and need not identify a scene. Different sources can reuse an ID.
+
+```ts
+import { DecisionEngine, type DeliveryConfig } from "@coll2112/decision-engine";
+
+const delivery: DeliveryConfig = {
+  type: "delayed",
+  minDelaySeconds: 2,
+  maxDelaySeconds: 5,
+  notify: true,
+};
+const engine = new DecisionEngine(story, {
+  scheduledContent: [{
+    id: "clue",
+    sourceId: "chapter-one",
+    conditions: [{ variable: "foundKey", operator: "===", value: true }],
+    delivery,
+  }],
+  clock: Date.now,       // absolute milliseconds; defaults to Date.now
+  random: Math.random, // value in [0, 1); defaults to Math.random
+});
+
+// For a fresh timeline, reconcile initial eligibility explicitly.
+engine.scheduleContent();
+// For a saved timeline, use engine.loadState(save) instead: it restores first.
+
+engine.choose("choice-id"); // successful effects automatically reconcile eligibility
+const deadline = engine.getNextDeliveryTime(); // number | undefined
+
+// The host calls this at a time of its choosing.
+const events = engine.deliverDueContent();
+for (const event of events) {
+  // Resolve event.sourceId/event.id in host content; event.notify is a hint.
+}
+const save = engine.getState(); // host owns persistence storage
+```
+
+`DeliveryConfig` is `{ type: "immediate" }` or `{ type: "delayed", minDelaySeconds, maxDelaySeconds, notify? }`. Missing delivery behaves like immediate delivery: eligible content has no waiting period and consumes no randomness. Existing scene/choice behavior is unchanged. These definitions do not hide scenes or navigate automatically.
+
+Construction and getters do not schedule. `scheduleContent()` explicitly reconciles and returns newly scheduled records; successful choices and loads also reconcile. `restart()` clears the timeline, including schedules; call `scheduleContent()` again to reconcile initial content. Navigation preserves schedules. Delivery is always explicit, including immediate items.
+
+Delayed content samples once when first scheduled: `min + random() * (max - min)` seconds. Equal bounds use that fixed delay without randomness. Bounds must be finite, nonnegative, and ordered; zero and fractional delays are allowed. `deliverAt` is an absolute millisecond timestamp. Timestamps must be finite, nonnegative, and within JavaScript's safe number range. `notify` defaults to `false`.
+
+| Method | Result |
+| --- | --- |
+| `getScheduledContent()` | All persisted records, copied |
+| `getPendingContent()` | All undelivered records, including currently ineligible ones |
+| `getDueContent()` | Eligible undelivered records with `deliverAt <= clock()` |
+| `getDeliveredContent()` | Records already delivered, regardless of current eligibility |
+| `getNextDeliveryTime()` | Earliest eligible undelivered deadline, possibly overdue; otherwise `undefined` |
+| `deliverDueContent()` | Marks due records delivered and returns newly delivered copies |
+
+Conditions remain authoritative at delivery time. An invalidated branch retains its deadline but cannot deliver until eligible again; an overdue item then delivers on the next explicit delivery call. Records whose definitions are absent from the current engine are preserved but cannot deliver. Each record persists `{ id, sourceId, deliverAt, delivered, notify }` in optional `GameState.scheduledContent`.
+
+Loading restores records before reconciling new eligibility, so existing timestamps, flags, and notification hints never re-roll. Malformed records and duplicate identities are rejected before replacing valid state. Returned records and loaded schedules are defensively copied. Persist state after delivery to preserve event deduplication across loads. Restoring an older snapshot from before delivery can emit the event again; the engine does not coordinate external storage or side effects.
+
+Hosts own timers, storage, and the interpretation of event signals. No renderer or platform timer is required. Failed choices roll back engine state; external side effects from custom handlers cannot be rolled back.
 
 ## Development
 

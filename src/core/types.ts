@@ -1,5 +1,6 @@
 import type {
   Asset,
+  Condition,
   CustomEffect,
   Scene,
   ScenePresentation,
@@ -11,6 +12,27 @@ export type GameState = {
   currentSceneId: string;
   history: string[];
   variables: Record<string, VariableValue>;
+  scheduledContent?: ScheduledContent[];
+};
+
+export type DeliveryConfig =
+  | { type: "immediate" }
+  | { type: "delayed"; minDelaySeconds: number; maxDelaySeconds: number; notify?: boolean };
+
+export type ScheduledContentDefinition = {
+  id: string;
+  sourceId: string;
+  conditions?: Condition[];
+  delivery?: DeliveryConfig;
+};
+
+export type ScheduledContent = {
+  id: string;
+  sourceId: string;
+  /** Absolute timestamp in milliseconds, using the injected clock's epoch. */
+  deliverAt: number;
+  delivered: boolean;
+  notify: boolean;
 };
 
 export type SceneView<
@@ -40,6 +62,9 @@ export type EffectHandlerMap<TData = unknown> = Record<
 >;
 
 export type DecisionEngineOptions<TCustomEffectData = unknown> = {
+  scheduledContent?: readonly ScheduledContentDefinition[];
+  clock?: () => number;
+  random?: () => number;
   effectHandlers?: EffectHandlers<TCustomEffectData> | EffectHandlerMap<TCustomEffectData>;
   unhandledCustomEffect?: "throw" | "ignore";
 };

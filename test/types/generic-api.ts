@@ -108,3 +108,46 @@ type ViewSceneContentIsPreserved = Assert<
 type ViewPresentationDataIsPreserved = Assert<
   IsEqual<typeof currentPresentationData, PresentationData | undefined>
 >;
+
+// Scheduled content and the shared evaluator are available from the public API.
+import {
+  evaluateConditions,
+  type Condition,
+  type DeliveryConfig,
+  type DecisionEngineOptions,
+  type GameState,
+  type ScheduledContent,
+  type ScheduledContentDefinition,
+} from "../../src/index.js";
+
+const delivery: DeliveryConfig = {
+  type: "delayed", minDelaySeconds: 1, maxDelaySeconds: 3, notify: true,
+};
+const conditions: Condition[] = [{ variable: "ready", operator: "===", value: true }];
+const definitions: ScheduledContentDefinition[] = [{ id: "item", sourceId: "source", delivery, conditions }];
+const options: DecisionEngineOptions<AppEffectData> = {
+  effectHandlers, scheduledContent: definitions, clock: () => 1000, random: () => 0.5,
+};
+const scheduledEngine = new DecisionEngine(story, options);
+const scheduled: ScheduledContent[] = scheduledEngine.scheduleContent();
+const all: ScheduledContent[] = scheduledEngine.getScheduledContent();
+const pending: ScheduledContent[] = scheduledEngine.getPendingContent();
+const due: ScheduledContent[] = scheduledEngine.getDueContent();
+const delivered: ScheduledContent[] = scheduledEngine.getDeliveredContent();
+const events: ScheduledContent[] = scheduledEngine.deliverDueContent();
+const next: number | undefined = scheduledEngine.getNextDeliveryTime();
+const legacySave: GameState = { currentSceneId: "room", history: [], variables: {} };
+scheduledEngine.loadState(legacySave);
+const saved: ScheduledContent[] | undefined = scheduledEngine.getState().scheduledContent;
+const eligible: boolean = evaluateConditions(conditions, legacySave.variables);
+const queriedScene = scheduledEngine.getScene("room");
+const queriedChoices = scheduledEngine.getAvailableChoices("room");
+type QueriedContentIsPreserved = Assert<IsEqual<typeof queriedScene.content, AdventureContent | undefined>>;
+type QueriedEffectsArePreserved = Assert<IsEqual<typeof queriedChoices[number]["effects"], import("../../src/index.js").Effect<AppEffectData>[] | undefined>>;
+
+// @ts-expect-error Delayed delivery requires both bounds.
+const invalidDelivery: DeliveryConfig = { type: "delayed", minDelaySeconds: 1 };
+// @ts-expect-error One canonical condition syntax.
+const invalidCondition: Condition = { variable: "x", operator: "==", value: 1 };
+// @ts-expect-error A persisted schedule requires its delivered flag.
+const invalidSchedule: ScheduledContent = { id: "x", sourceId: "s", deliverAt: 1, notify: false };
