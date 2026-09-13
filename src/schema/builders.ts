@@ -13,14 +13,22 @@ type BuilderOptions<T, K extends keyof T> = Partial<Omit<T, K>>;
 export function choice<TCustomEffectData = unknown>(
   text: string,
   nextSceneId: string,
-  options?: BuilderOptions<Choice<TCustomEffectData>, "text" | "nextSceneId">,
-): Choice<TCustomEffectData> {
+  options?: BuilderOptions<Extract<Choice<TCustomEffectData>, { nextSceneId: string }>, "text" | "nextSceneId">,
+): Extract<Choice<TCustomEffectData>, { nextSceneId: string }> {
   return {
     id: options?.id ?? slugify(text),
     text,
     nextSceneId,
     ...options,
   };
+}
+
+/** Apply effects without navigating or adding history. */
+export function stayChoice<TCustomEffectData = unknown>(
+  text: string,
+  options?: BuilderOptions<Extract<Choice<TCustomEffectData>, { navigation: "stay" }>, "text" | "navigation" | "nextSceneId">,
+): Extract<Choice<TCustomEffectData>, { navigation: "stay" }> {
+  return { id: options?.id ?? slugify(text), text, ...options, navigation: "stay" };
 }
 
 export function scene<

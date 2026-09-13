@@ -126,6 +126,7 @@ export class DecisionEngine<
   private readonly sceneSectionMap: Map<string, Section<TPresentationData>>;
 
   private readonly definitions: Map<string, ScheduledContentDefinition>;
+  private readonly initialVariables: GameState["variables"];
   private readonly clock: () => number;
   private readonly random: () => number;
 
@@ -150,6 +151,7 @@ export class DecisionEngine<
     if (typeof this.clock !== "function") throw new Error("clock must be a function");
     if (typeof this.random !== "function") throw new Error("random must be a function");
     this.story = story;
+    this.initialVariables = { ...story.initialVariables };
     this.effectHandlers = createEffectHandlers(options.effectHandlers);
     this.unhandledCustomEffect = options.unhandledCustomEffect ?? "throw";
 
@@ -166,7 +168,7 @@ export class DecisionEngine<
     this.state = {
       currentSceneId: story.startSceneId,
       history: [],
-      variables: {},
+      variables: { ...this.initialVariables },
     };
   }
 
@@ -237,8 +239,10 @@ export class DecisionEngine<
       throw error;
     }
 
-    this.state.history.push(currentScene.id);
-    this.state.currentSceneId = choice.nextSceneId;
+    if (choice.navigation !== "stay") {
+      this.state.history.push(currentScene.id);
+      this.state.currentSceneId = choice.nextSceneId;
+    }
 
     return this.getCurrentScene();
   }
@@ -265,6 +269,7 @@ export class DecisionEngine<
     for (const [key, value] of Object.entries(state.variables)) variableValue(value, `GameState.variables.${key}`);
     validateSchedules(state.scheduledContent);
     const restored = cloneState(state);
+    restored.variables = { ...this.initialVariables, ...restored.variables };
     // Reconcile against the restored timeline, never the previous engine state.
     this.reconcileSchedules(restored);
     this.state = restored;
@@ -282,7 +287,7 @@ export class DecisionEngine<
     this.state = {
       currentSceneId: this.story.startSceneId,
       history: [],
-      variables: {},
+      variables: { ...this.initialVariables },
     };
 
     return this.getCurrentScene();

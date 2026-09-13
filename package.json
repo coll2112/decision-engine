@@ -1,6 +1,6 @@
 {
   "name": "@coll2112/decision-engine",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A TypeScript decision engine for branching story data, runtime state, and section-aware presentation.",
   "private": false,
   "type": "module",
@@ -10,7 +10,12 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./story.schema.json": "./schema/story.schema.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/coll2112/decision-engine.git"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
@@ -20,7 +25,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "schema/story.schema.json"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -33,6 +39,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "ajv": "^8.20.0",
     "typescript": "^5.0.0"
   }
 }

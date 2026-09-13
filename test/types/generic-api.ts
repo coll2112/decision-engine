@@ -151,3 +151,31 @@ const invalidDelivery: DeliveryConfig = { type: "delayed", minDelaySeconds: 1 };
 const invalidCondition: Condition = { variable: "x", operator: "==", value: 1 };
 // @ts-expect-error A persisted schedule requires its delivered flag.
 const invalidSchedule: ScheduledContent = { id: "x", sourceId: "s", deliverAt: 1, notify: false };
+
+import { stayChoice, type Choice, type ChoiceNavigation, type Story } from "../../src/index.js";
+const typedDefaults: Story = { id: "defaults", title: "Defaults", startSceneId: "start", initialVariables: { seen: false, count: 0, label: "" }, scenes: [] };
+const stay = stayChoice<AppEffectData>("Inspect", { effects: [{ type: "track", data: { id: "item" } }] });
+const stayShape: Choice<AppEffectData> = { id: "inspect", text: "Inspect", navigation: "stay" };
+const legacyChoice: Choice = { id: "go", text: "Go", nextSceneId: "room" };
+const explicitTransition: Choice = { id: "go", text: "Go", navigation: "scene", nextSceneId: "room" };
+function target(value: ChoiceNavigation): string | undefined {
+  if (value.navigation === "stay") return undefined;
+  const sceneId: string = value.nextSceneId;
+  return sceneId;
+}
+// @ts-expect-error Defaults must use VariableValue.
+typedDefaults.initialVariables = { nested: {} };
+// @ts-expect-error Targetless choices must explicitly stay.
+const missingNavigation: Choice = { id: "bad", text: "Bad" };
+// @ts-expect-error Stay choices cannot also navigate.
+const conflictingNavigation: Choice = { id: "bad", text: "Bad", navigation: "stay", nextSceneId: "room" };
+// @ts-expect-error Scene navigation requires a target.
+const missingTarget: Choice = { id: "bad", text: "Bad", navigation: "scene" };
+// @ts-expect-error Transition builders cannot select stay navigation.
+choice("Bad", "room", { navigation: "stay" });
+// @ts-expect-error Stay builders cannot specify targets.
+stayChoice("Bad", { nextSceneId: "room" });
+
+// Builders preserve their specific navigation branch for existing callers.
+const builderTarget: string = choice("Go", "room").nextSceneId;
+const builderNavigation: "stay" = stayChoice("Inspect").navigation;

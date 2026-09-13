@@ -55,6 +55,74 @@ const story = parseStory(storyJson);
 const engine = new DecisionEngine(story);
 ```
 
+## Authoring defaults and stay-in-place choices
+
+Set `Story.initialVariables` to string, finite number, or boolean defaults:
+
+```ts
+import { defineStory, scene, stayChoice, choice } from "@coll2112/decision-engine";
+
+const story = defineStory({
+  id: "room",
+  title: "A room",
+  startSceneId: "room",
+  initialVariables: { inspected: false, clues: 0, label: "" },
+  scenes: [
+    scene("room", "Look around.", [
+      stayChoice("Inspect", {
+        conditions: [{ variable: "inspected", operator: "===", value: false }],
+        effects: [
+          { variable: "inspected", operation: "set", value: true },
+          { variable: "clues", operation: "increment", value: 1 },
+        ],
+      }),
+      choice("Leave", "hall"),
+    ]),
+    scene("hall", "The hallway."),
+  ],
+});
+```
+
+New engines snapshot the defaults. New games and restarts use independent copies; modifying the authored defaults later does not affect an existing engine. Loads merge defaults beneath saved variables before reconciling schedules. Saved `false`, `0`, `""`, and variables absent from the defaults are preserved. Invalid saved values are rejected, not replaced with defaults. Stories without defaults continue to start with `{}`.
+
+`stayChoice()` produces the canonical JSON shape `{ id, text, navigation: "stay", conditions?, effects? }`. It applies effects once per successful selection, reconciles schedules, and returns the current scene with refreshed available choices, without adding history. To make it selectable only once, use a condition and effect as above.
+
+Target-based choices remain `{ id, text, nextSceneId, ... }`; an optional `navigation: "scene"` explicitly identifies that branch of the exported `ChoiceNavigation` union. Self-transitions still add history. Stay choices must omit `nextSceneId`; scene choices must supply it. Missing targets, conflicting instructions, and unknown navigation values are rejected.
+
+## Editor JSON Schema
+
+The package exports a Draft 7 schema asset at `@coll2112/decision-engine/story.schema.json`. Associate a JSON story with its installed file using `$schema` (adjust the relative path for your story's directory):
+
+```json
+{
+  "$schema": "./node_modules/@coll2112/decision-engine/schema/story.schema.json",
+  "id": "example",
+  "title": "Example",
+  "startSceneId": "room",
+  "initialVariables": { "inspected": false },
+  "scenes": [{
+    "id": "room",
+    "text": "A quiet room.",
+    "choices": [{
+      "id": "inspect",
+      "text": "Inspect",
+      "navigation": "stay",
+      "effects": [{ "variable": "inspected", "operation": "set", "value": true }]
+    }]
+  }]
+}
+```
+
+The engine accepts and ignores `$schema`. Editors can validate story structure, defaults, choices/navigation, conditions, effects, sections, assets, and built-in presentation hints. Custom scene `content`, presentation `data`, custom effect `data`, and hotspot `props` remain extensible.
+
+Reusable fragments include `#/definitions/condition`, `effect`, `navigation`, `delivery`, `scheduledContentDefinition`, and `scheduledContentDefinitions` (an array). Append a full fragment such as `#/definitions/delivery` to the schema path when associating a standalone JSON document. Scheduling definitions remain engine options; they are not a new story field.
+
+Run `parseStory` or construct `DecisionEngine` as well as using editor validation. Portable JSON Schema cannot check scene/section references, ID uniqueness by field, section cycles, scheduling identity pairs, or compare `minDelaySeconds` with `maxDelaySeconds`; runtime validation retains those checks. JSON cannot represent non-finite numbers, which runtime validation also rejects.
+
+### Migrating from 0.1.x
+
+Existing `nextSceneId` choices and saves need no rewrite. Add defaults when introducing variables to older saves. Replace a self-transition with `navigation: "stay"` only when you want to stop adding history. Code that reads `choice.nextSceneId` must first exclude `choice.navigation === "stay"`. Built-in presentation fields now receive structural validation consistent with their TypeScript types and editor schema; keep application-specific payloads in `content` or `data`.
+
 ## Optional Sections
 
 Sections are optional. A simple visual novel or point-and-click game can use only scenes.

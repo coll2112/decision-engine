@@ -1,5 +1,6 @@
+import { validateAssets, validatePresentation } from "./presentation-validation.js";
 import type { Story } from "./types.js";
-import { object, string, validateConditions, validateEffects } from "./shape-validation.js";
+import { object, string, validateConditions, validateEffects, variableValue } from "./shape-validation.js";
 
 export type StoryValidationOptions<
   TContent = unknown,
@@ -26,6 +27,13 @@ export function validateStory<
   string(story.startSceneId, "Story.startSceneId");
   if (!Array.isArray(story.scenes)) throw new Error("Story.scenes must be an array");
   if (story.sections !== undefined && !Array.isArray(story.sections)) throw new Error("Story.sections must be an array");
+  if (story.$schema !== undefined && typeof story.$schema !== "string") throw new Error("Story.$schema must be a string");
+  if (story.initialVariables !== undefined) {
+    object(story.initialVariables, "Story.initialVariables");
+    for (const [key, value] of Object.entries(story.initialVariables)) {
+      variableValue(value, `Story.initialVariables.${key}`);
+    }
+  }
   const sceneIds = new Set<string>();
   const sectionIds = new Set<string>();
   const sectionsById = new Map<
@@ -39,6 +47,8 @@ export function validateStory<
     string(scene.id, "Scene.id");
     if (typeof scene.text !== "string") throw new Error(`Scene ${scene.id}.text must be a string`);
     if (!Array.isArray(scene.choices)) throw new Error(`Scene ${scene.id}.choices must be an array`);
+    if (scene.speaker !== undefined && typeof scene.speaker !== "string") throw new Error(`Scene ${scene.id}.speaker must be a string`);
+    if (scene.presentation !== undefined) validatePresentation(scene.presentation, `Scene ${scene.id}.presentation`);
     const choiceIds = new Set<string>();
     for (const choice of scene.choices) {
       object(choice, `Scene ${scene.id} choice`);
@@ -47,7 +57,14 @@ export function validateStory<
       if (choiceIds.has(choice.id)) throw new Error(`${context}.id is duplicate`);
       choiceIds.add(choice.id);
       if (typeof choice.text !== "string") throw new Error(`${context}.text must be a string`);
-      string(choice.nextSceneId, `${context}.nextSceneId`);
+      if (choice.navigation === "stay") {
+        if ("nextSceneId" in choice) throw new Error(`${context}.nextSceneId conflicts with navigation: stay`);
+      } else {
+        if (choice.navigation !== undefined && choice.navigation !== "scene") {
+          throw new Error(`${context}.navigation must be scene or stay`);
+        }
+        string(choice.nextSceneId, `${context}.nextSceneId`);
+      }
       validateConditions(choice.conditions, `${context}.conditions`);
       validateEffects(choice.effects, `${context}.effects`);
     }
@@ -78,6 +95,9 @@ export function validateStory<
     string(section.id, "Section.id");
     if (section.parentSectionId !== undefined) string(section.parentSectionId, `Section ${section.id}.parentSectionId`);
     if (section.sceneIds !== undefined && !Array.isArray(section.sceneIds)) throw new Error(`Section ${section.id}.sceneIds must be an array`);
+    if (section.title !== undefined && typeof section.title !== "string") throw new Error(`Section ${section.id}.title must be a string`);
+    if (section.presentation !== undefined) validatePresentation(section.presentation, `Section ${section.id}.presentation`);
+    if (section.assets !== undefined) validateAssets(section.assets, `Section ${section.id}.assets`);
     if (sectionIds.has(section.id)) {
       throw new Error(`Duplicate section id found: ${section.id}`);
     }
@@ -98,6 +118,7 @@ export function validateStory<
     const sectionSceneIds = new Set<string>();
 
     for (const sceneId of section.sceneIds ?? []) {
+      string(sceneId, `Section ${section.id}.sceneIds`);
       if (sectionSceneIds.has(sceneId)) {
         throw new Error(
           `Section ${section.id} contains duplicate scene ${sceneId}`,
@@ -156,7 +177,7 @@ export function validateStory<
 
   for (const scene of story.scenes) {
     for (const choice of scene.choices) {
-      if (!sceneIds.has(choice.nextSceneId)) {
+      if (choice.navigation !== "stay" && !sceneIds.has(choice.nextSceneId)) {
         throw new Error(
           `Scene ${scene.id} has choice ${choice.id} pointing to missing scene ${choice.nextSceneId} (nextSceneId)`,
         );

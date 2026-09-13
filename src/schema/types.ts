@@ -6,6 +6,9 @@ export type Story<
   id: string;
   title: string;
   startSceneId: string;
+  /** Optional editor schema association; ignored by the engine. */
+  $schema?: string;
+  initialVariables?: Record<string, VariableValue>;
   sections?: Section<TPresentationData>[];
   scenes: Scene<TContent, TPresentationData, TCustomEffectData>[];
 };
@@ -87,10 +90,13 @@ export type AudioCue = {
   delayMs?: number;
 };
 
-export type Choice<TCustomEffectData = unknown> = {
+export type ChoiceNavigation =
+  | { navigation?: "scene"; nextSceneId: string }
+  | { navigation: "stay"; nextSceneId?: never };
+
+export type Choice<TCustomEffectData = unknown> = ChoiceNavigation & {
   id: string;
   text: string;
-  nextSceneId: string;
   conditions?: Condition[];
   effects?: Effect<TCustomEffectData>[];
 };

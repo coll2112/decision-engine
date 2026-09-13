@@ -1,0 +1,540 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Decision Engine Story",
+  "description": "Package-owned story structure. Runtime additionally checks references, identity uniqueness, parent cycles, and delivery bound ordering.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "id": {
+      "$ref": "#/definitions/identifier"
+    },
+    "title": {
+      "type": "string"
+    },
+    "startSceneId": {
+      "$ref": "#/definitions/identifier"
+    },
+    "initialVariables": {
+      "$ref": "#/definitions/variables"
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/section"
+      }
+    },
+    "scenes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/scene"
+      }
+    }
+  },
+  "required": [
+    "id",
+    "title",
+    "startSceneId",
+    "scenes"
+  ],
+  "definitions": {
+    "identifier": {
+      "type": "string",
+      "pattern": "\\S",
+      "description": "A nonempty identifier containing at least one non-whitespace character."
+    },
+    "variableValue": {
+      "type": [
+        "string",
+        "number",
+        "boolean"
+      ]
+    },
+    "variables": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/variableValue"
+      }
+    },
+    "condition": {
+      "type": "object",
+      "properties": {
+        "variable": {
+          "$ref": "#/definitions/identifier"
+        },
+        "operator": {
+          "enum": [
+            "===",
+            "!==",
+            ">",
+            ">=",
+            "<",
+            "<="
+          ]
+        },
+        "value": {
+          "$ref": "#/definitions/variableValue"
+        }
+      },
+      "required": [
+        "variable",
+        "operator",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "variableEffect": {
+      "type": "object",
+      "properties": {
+        "variable": {
+          "$ref": "#/definitions/identifier"
+        },
+        "operation": {
+          "enum": [
+            "set",
+            "increment",
+            "decrement"
+          ]
+        },
+        "value": {
+          "$ref": "#/definitions/variableValue"
+        }
+      },
+      "required": [
+        "variable",
+        "operation",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "customEffect": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/identifier"
+        },
+        "data": {}
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "effect": {
+      "oneOf": [
+        {
+          "$ref": "#/definitions/variableEffect"
+        },
+        {
+          "$ref": "#/definitions/customEffect"
+        }
+      ]
+    },
+    "navigation": {
+      "description": "Legacy nextSceneId implies scene navigation. Stay choices must omit nextSceneId; self-transitions still navigate.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "navigation": {
+              "const": "scene"
+            },
+            "nextSceneId": {
+              "$ref": "#/definitions/identifier"
+            }
+          },
+          "required": [
+            "nextSceneId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "navigation": {
+              "const": "stay"
+            },
+            "nextSceneId": false
+          },
+          "required": [
+            "navigation"
+          ]
+        }
+      ]
+    },
+    "choice": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/identifier"
+        },
+        "text": {
+          "type": "string"
+        },
+        "nextSceneId": {
+          "$ref": "#/definitions/identifier"
+        },
+        "navigation": {
+          "enum": [
+            "scene",
+            "stay"
+          ]
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/condition"
+          }
+        },
+        "effects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/effect"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "text"
+      ],
+      "allOf": [
+        {
+          "$ref": "#/definitions/navigation"
+        }
+      ]
+    },
+    "asset": {
+      "type": "object",
+      "properties": {
+        "src": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "src"
+      ]
+    },
+    "sceneElement": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "positionX": {
+              "type": "number"
+            },
+            "positionY": {
+              "type": "number"
+            },
+            "width": {
+              "type": "number"
+            },
+            "height": {
+              "type": "number"
+            },
+            "type": {
+              "const": "image"
+            },
+            "asset": {
+              "$ref": "#/definitions/asset"
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "asset"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "positionX": {
+              "type": "number"
+            },
+            "positionY": {
+              "type": "number"
+            },
+            "width": {
+              "type": "number"
+            },
+            "height": {
+              "type": "number"
+            },
+            "type": {
+              "const": "hotspot"
+            },
+            "props": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "id",
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "positionX": {
+              "type": "number"
+            },
+            "positionY": {
+              "type": "number"
+            },
+            "width": {
+              "type": "number"
+            },
+            "height": {
+              "type": "number"
+            },
+            "type": {
+              "const": "light"
+            },
+            "color": {
+              "type": "string"
+            },
+            "intensity": {
+              "type": "number"
+            },
+            "flicker": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "type"
+          ]
+        }
+      ]
+    },
+    "audioTrack": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "src": {
+          "type": "string"
+        },
+        "volume": {
+          "type": "number"
+        },
+        "loop": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "src"
+      ]
+    },
+    "audioCue": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "src": {
+          "type": "string"
+        },
+        "volume": {
+          "type": "number"
+        },
+        "delayMs": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "src"
+      ]
+    },
+    "sceneAudio": {
+      "type": "object",
+      "properties": {
+        "music": {
+          "$ref": "#/definitions/audioTrack"
+        },
+        "ambience": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/audioTrack"
+          }
+        },
+        "sfx": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/audioCue"
+          }
+        }
+      }
+    },
+    "presentation": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "data": {},
+        "background": {
+          "$ref": "#/definitions/asset"
+        },
+        "elements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/sceneElement"
+          }
+        },
+        "audio": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/sceneAudio"
+          }
+        }
+      }
+    },
+    "section": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/identifier"
+        },
+        "title": {
+          "type": "string"
+        },
+        "parentSectionId": {
+          "$ref": "#/definitions/identifier"
+        },
+        "presentation": {
+          "$ref": "#/definitions/presentation"
+        },
+        "assets": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/asset"
+          }
+        },
+        "sceneIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/identifier"
+          }
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "scene": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/identifier"
+        },
+        "content": {},
+        "presentation": {
+          "$ref": "#/definitions/presentation"
+        },
+        "speaker": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/choice"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "text",
+        "choices"
+      ]
+    },
+    "delivery": {
+      "description": "Omission at the definition level is immediate. Runtime also checks minDelaySeconds <= maxDelaySeconds.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "immediate"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "delayed"
+            },
+            "minDelaySeconds": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 9007199254740.99
+            },
+            "maxDelaySeconds": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 9007199254740.99
+            },
+            "notify": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "minDelaySeconds",
+            "maxDelaySeconds"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "scheduledContentDefinition": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/identifier"
+        },
+        "sourceId": {
+          "$ref": "#/definitions/identifier"
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/condition"
+          }
+        },
+        "delivery": {
+          "$ref": "#/definitions/delivery"
+        }
+      },
+      "required": [
+        "id",
+        "sourceId"
+      ]
+    },
+    "scheduledContentDefinitions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/scheduledContentDefinition"
+      }
+    }
+  }
+}
